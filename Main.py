@@ -22,19 +22,20 @@ def dark():
 def light():
 	widgets.setStyleSheet("")
 
+
 months_shortcuts = {
-    '1': 'Jan',
-    '2': 'Feb',
-    '3': 'Mar',
-    '4': 'Apr',
-    '5': 'May',
-    '6': 'Jun',
-    '7': 'Jul',
-    '8': 'Aug',
-    '9': 'Sep',
-    '10': 'Oct',
-    '11': 'Nov',
-    '12': 'Dec'
+	'01': 'Jan',
+	'02': 'Feb',
+	'03': 'Mar',
+	'04': 'Apr',
+	'05': 'May',
+	'06': 'Jun',
+	'07': 'Jul',
+	'08': 'Aug',
+	'09': 'Sep',
+	'10': 'Oct',
+	'11': 'Nov',
+	'12': 'Dec'
 }
 
 
@@ -106,7 +107,6 @@ class CreateAccount(QMainWindow):
 		else:
 			QMessageBox().warning(self, "Invalid Credential", confirmation,QMessageBox.Ok)
 
-senderID = [(1,)]
 
 class MainChatWindow(QMainWindow):
 	def __init__(self):
@@ -115,7 +115,7 @@ class MainChatWindow(QMainWindow):
 
 		self.buttons_list = {}
 
-		self.search_bar.textChanged.connect(lambda: self.searchList(self.search_bar.text()))
+		self.search_bar.textChanged.connect(lambda: self.userList(self.search_bar.text()))
 		
 		self.v_spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
 		self.userList_layout = QVBoxLayout(self.user_list)
@@ -167,9 +167,50 @@ class MainChatWindow(QMainWindow):
 		wid.deleteLater()
 		widgets.setCurrentIndex(0)
 
-	def userList(self):
+	def send(self):
+		if self.message_field.text():
+			dhaka_timezone = pytz.timezone('Asia/Dhaka')
+			current_time = datetime.now(dhaka_timezone)
+			filtered_time = current_time.strftime('%h %d  %I:%M %p')
 
-		names = connection.sendQuery("fetch_user", [senderID[0][0]])
+			text = self.message_field.text() + "\n" + filtered_time
+			item = QListWidgetItem(text)
+			item.setTextAlignment(Qt.AlignRight)
+
+			connection.sendQuery("update_chats", [senderID[0][0], receiverID[0][0], self.message_field.text()])
+			
+			self.messages.addItem(item)
+			self.message_field.clear()
+
+	def withTime(self, msg):
+		text = msg[1]
+		filtered_time = str(msg[2]).split(":")
+		filtered_date = str(msg[3]).split('-')
+		day = filtered_date[2]
+		month = months_shortcuts[filtered_date[1]]
+
+		if (12 - int(filtered_time[0])) == 0:  # 12:10
+			result = "12:" + filtered_time[1] + " PM"
+		elif (12 - int(filtered_time[0])) == 12:  # 00:10
+			result = "12:" + filtered_time[1] + " AM"
+		elif (12 - int(filtered_time[0])) > 0:  # 13:10
+			result = filtered_time[0] + ":" + filtered_time[1] + " AM"
+		else:  # 10:10
+			result = str(int(filtered_time[0]) - 12) + ":" + filtered_time[1] + " PM"
+				
+		text += "\n" + month + " " + day + "  " + result
+		return text
+
+	def userList(self,target_name=""):
+
+		for widget in self.user_list.findChildren(QWidget):
+				widget.deleteLater()
+				self.userList_layout.removeItem(self.v_spacer)
+
+		if target_name:
+			names = connection.sendQuery("fetch_user_search", [target_name, senderID[0][0]])
+		else:
+			names = connection.sendQuery("fetch_user", [senderID[0][0]])
 
 		for username in names:
 			user = uic.loadUi("ui//user.ui")
@@ -190,68 +231,7 @@ class MainChatWindow(QMainWindow):
 
 		self.userList_layout.addItem(self.v_spacer)
 
-	def searchList(self, target_name):
-
-		for widget in self.user_list.findChildren(QWidget):
-			widget.deleteLater()
-
-		self.userList_layout.removeItem(self.v_spacer)
-
-		names = connection.sendQuery("fetch_user_search", [target_name, senderID[0][0]])
-
-		for username in names:
-			user = uic.loadUi("ui//user.ui")
-			parts = user.findChildren(QPushButton)
-
-			img = parts[0]
-			img.setStyleSheet("background : url(pictures/user.png) no-repeat center;")
-			
-			u_name = parts[1]
-			u_name.setText(username[0])
-
-			u_name.setCheckable(True)
-			u_name.setChecked(False)
-			self.buttons_list[u_name] = u_name.isChecked()
-			u_name.clicked.connect(lambda clicked, name=username, btn=u_name: self.showChats(name,btn))			
-			self.userList_layout.addWidget(user)
-
-		self.userList_layout.addItem(self.v_spacer)
-
-	def send(self):
-		if self.message_field.text():
-			dhaka_timezone = pytz.timezone('Asia/Dhaka')
-			current_time = datetime.now(dhaka_timezone)
-			time = current_time.strftime('%d %h    %I:%M %p')
-
-			text = self.message_field.text() + "\n" + time
-
-			item = QListWidgetItem(text)
-			item.setTextAlignment(Qt.AlignRight)
-
-			connection.sendQuery("update_chats", [senderID[0][0], receiverID[0][0], self.message_field.text()])
-			
-			self.messages.addItem(item)
-			self.message_field.clear()
-
-	def withTime(self,msg):
-		text = msg[1]
-		time = str(msg[2]).split(":")
-		date = str(msg[3]).split('-')
-		day = date[2]
-		month = months_shortcuts[date[1][1]]
-
-		if (12 - int(time[0])) == 0:
-			time = "12:" + time[1] + " PM"
-		elif (12 - int(time[0])) < 0:
-			time = str(int(time[0]) - 12) + ":" + time[1] + " PM"
-		else:
-			time = time[0] + ":" + time[1] + " AM"
-				
-		text = text + "\n" + month + " " + day + "	" + time
-
-		return text
-
-	def showChats(self, nameOfUser, button):
+	def showChats(self, name_of_user, button):
 		
 		if self.buttons_list[button]:
 			return
@@ -264,11 +244,11 @@ class MainChatWindow(QMainWindow):
 
 		self.buttons_list[button] = True
 
-		self.user_name.setText(nameOfUser[0])
+		self.user_name.setText(name_of_user[0])
 		self.user_photo.setStyleSheet("background : url(pictures/user.png) no-repeat center;")
 
 		global receiverID
-		receiverID = connection.sendQuery("get_id_by_username", [nameOfUser[0]])
+		receiverID = connection.sendQuery("get_id_by_username", [name_of_user[0]])
 		chats = connection.sendQuery("showMessages", [senderID[0][0], receiverID[0][0]])
 
 		self.messages.clear()
@@ -297,11 +277,11 @@ class MainChatWindow(QMainWindow):
 				msg = connection.sendQuery("look_for_message", [receiverID[0][0], senderID[0][0]])
 				if msg:
 					for messages in msg:
-						text = self.withTime(msg)
+						text = self.withTime(messages)
 						self.messages.addItem(text)
 						connection.sendQuery("message_taken", [receiverID[0][0], senderID[0][0]])
 						retrieved_name = connection.sendQuery('get_all_by_id', [receiverID[0][0]])[0][1]
-						Notification.createNotification(f"New Message from {retrieved_name}", str(messages[0]))
+						Notification.createNotification(f"New Message from {retrieved_name}", str(messages[1]))
 			except Exception as e:
 				print(f"[PROBLEM in updateWindow] {e}")
 
@@ -366,7 +346,7 @@ def main():
 
 	window2 = CreateAccount()
 	widgets.addWidget(window2)
-  
+
 	widgets.show()
 	app.exec_()
 
